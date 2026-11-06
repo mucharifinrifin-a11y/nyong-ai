@@ -1,14 +1,13 @@
 /**
  * NYONG AI
  * Firebase App Check dinonaktifkan.
- * Percakapan AI berjalan menggunakan model lokal di perangkat.
+ * Tidak ada ketergantungan pada layanan Firebase.
  */
 
 let isAppCheckInitialized = false;
 
 /**
- * Kompatibilitas untuk pemanggil lama.
- * Tidak melakukan inisialisasi Firebase.
+ * Mempertahankan kompatibilitas dengan pemanggil lama.
  */
 export const initializeAppCheck = async (): Promise<void> => {
   if (isAppCheckInitialized) {
@@ -21,8 +20,12 @@ export const initializeAppCheck = async (): Promise<void> => {
 };
 
 /**
- * Tidak ada token Firebase karena App Check tidak digunakan.
+ * Mengembalikan string kosong karena Firebase App Check
+ * tidak digunakan dalam NYONG AI.
+ *
+ * Tipe string dipertahankan agar kompatibel dengan
+ * fungsi benchmark, feedback, dan pengujian yang sudah ada.
  */
-export const getAppCheckToken = async (): Promise<null> => {
-  return null;
+export const getAppCheckToken = async (): Promise<string> => {
+  return '';
 };
