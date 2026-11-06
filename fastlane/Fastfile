@@ -1,50 +1,138 @@
-desc "Bump version for both Android and iOS"
-lane :bump_version do |options|
-  version_type = options[:version_type] || "patch"
-  root_dir = File.expand_path('..', Dir.pwd)
-  
-  # Common paths
-  package_json_path = File.join(root_dir, 'package.json')
-  version_file_path = File.join(root_dir, '.version')
+require "json"
 
-  # Bump version in package.json
-  Dir.chdir(root_dir) do
+default_platform(:android)
+
+# Lokasi utama proyek
+ROOT_DIR = File.expand_path("..", _dir_)
+
+desc "Bump version for Android and iOS"
+lane :bump_version do |options|
+  version_type = (options[:version_type] || "patch").to_s
+
+  unless %w[major minor patch].include?(version_type)
+    UI.user_error!("version_type harus major, minor, atau patch")
+  end
+
+  package_json_path = File.join(ROOT_DIR, "package.json")
+  version_file_path = File.join(ROOT_DIR, ".version")
+  gradle_file = File.join(ROOT_DIR, "android/app/build.gradle")
+
+  # Naikkan versi package.json
+  Dir.chdir(ROOT_DIR) do
     sh("yarn version --#{version_type} --no-git-tag-version")
   end
-  
-  new_version = JSON.parse(File.read(package_json_path))['version']
-  sh("echo #{new_version} > #{version_file_path}")
 
-  # For Android: Read current version code and increment it
-  gradle_file = File.join(root_dir, "android/app/build.gradle")
-  current_version_code = android_get_version_code(gradle_file: gradle_file).to_i
+  new_version = JSON.parse(File.read(package_json_path))["version"]
+  UI.user_error!("Versi baru tidak ditemukan") if new_version.to_s.empty?
+
+  File.write(version_file_path, "#{new_version}\n")
+
+  # Naikkan versionCode Android
+  current_version_code =
+    android_get_version_code(gradle_file: gradle_file).to_i
+
   new_version_code = current_version_code + 1
 
-  # Update Android version
   android_set_version_code(
     gradle_file: gradle_file,
     version_code: new_version_code
   )
-  
+
   android_set_version_name(
     gradle_file: gradle_file,
     version_name: new_version
   )
 
-  # For iOS: Bump version and build number
-  ios_dir = File.join(root_dir, 'ios')
-  Dir.chdir(ios_dir) do
-    increment_version_number_in_xcodeproj(
-      version_number: new_version,
-      xcodeproj: File.join(ios_dir, "PocketPal.xcodeproj")
-    )
-    increment_build_number_in_xcodeproj(
-      xcodeproj: File.join(ios_dir, "PocketPal.xcodeproj")
+  # Perbarui versi iOS jika proyek iOS tersedia
+  ios_dir = File.join(ROOT_DIR, "ios")
+  ios_project = File.join(ios_dir, "PocketPal.xcodeproj")
+
+  if Dir.exist?(ios_project)
+    Dir.chdir(ios_dir) do
+      increment_version_number_in_xcodeproj(
+        version_number: new_version,
+        xcodeproj: ios_project
+      )
+
+      increment_build_number_in_xcodeproj(
+        xcodeproj: ios_project
+      )
+    end
+  end
+
+  UI.message("Versi berhasil diperbarui:")
+  UI.message("Version name: #{new_version}")
+  UI.message("Android version code: #{new_version_code}")
+end
+
+
+desc "Build Android release APK and AAB for NYONG AI"
+lane :build_android_release do
+  android_dir = File.join(ROOT_DIR, "android")
+
+  # Pastikan konfigurasi signing tersedia
+  required_variables = %w[
+    KEYSTORE_PASSWORD
+    KEY_ALIAS
+    KEY_PASSWORD
+  ]
+
+  missing_variables = required_variables.select do |key|
+    ENV[key].to_s.empty?
+  end
+
+  unless missing_variables.empty?
+    UI.user_error!(
+      "Konfigurasi signing belum lengkap: #{missing_variables.join(', ')}"
     )
   end
 
-  UI.message("Bumped versions:")
-  UI.message("- Version name: #{new_version}")
-  UI.message("- Android version code: #{new_version_code}")
-  UI.message("- iOS build number: #{get_build_number_from_xcodeproj(xcodeproj: File.join(ios_dir, 'PocketPal.xcodeproj'))}")
+  keystore_path = File.join(
+    android_dir,
+    "app",
+    "pocketpal-release-key.keystore"
+  )
+
+  unless File.exist?(keystore_path)
+    UI.user_error!("File keystore tidak ditemukan: #{keystore_path}")
+  end
+
+  # Bersihkan hasil build sebelumnya
+  gradle(
+    task: "clean",
+    project_dir: android_dir
+  )
+
+  # Bangun APK release
+  gradle(
+    task: "assemble",
+    flavor: "Prod",
+    build_type: "Release",
+    project_dir: android_dir
+  )
+
+  # Bangun Android App Bundle
+  gradle(
+    task: "bundle",
+    flavor: "Prod",
+    build_type: "Release",
+    project_dir: android_dir
+  )
+
+  apk_path = File.join(
+    android_dir,
+    "app/build/outputs/apk/prod/release/app-prod-release.apk"
+  )
+
+  aab_path = File.join(
+    android_dir,
+    "app/build/outputs/bundle/prodRelease/app-prod-release.aab"
+  )
+
+  UI.user_error!("APK tidak ditemukan: #{apk_path}") unless File.exist?(apk_path)
+  UI.user_error!("AAB tidak ditemukan: #{aab_path}") unless File.exist?(aab_path)
+
+  UI.success("Build Android selesai.")
+  UI.message("APK: #{apk_path}")
+  UI.message("AAB: #{aab_path}")
 end
