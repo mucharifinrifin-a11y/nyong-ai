@@ -94,6 +94,12 @@ jobs:
         run: yarn lint
 
       # Step 5: Run TypeScript type checks
+      - name: Debug actual fb.ts
+        run: |
+          echo "=== ACTUAL fb.ts ==="
+          sed -n '1,40p' src/utils/fb.ts
+          echo "=== FIREBASE IMPORT CHECK ==="
+          grep -nE "@react-native-firebase/app" src/utils/fb.ts || true
       - name: Run TypeScript type check
         run: yarn typecheck
 
