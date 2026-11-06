@@ -112,18 +112,30 @@ android {
             keyPassword 'android'
         }
         release {
-            // Read signing credentials from .env file or environment variables
-            def releaseStorePassword = project.env.get("APP_RELEASE_STORE_PASSWORD") ?: System.getenv("APP_RELEASE_STORE_PASSWORD")
-            def releaseKeyPassword = project.env.get("APP_RELEASE_KEY_PASSWORD") ?: System.getenv("APP_RELEASE_KEY_PASSWORD")
+    // Signing credentials for NYONG AI
+    def releaseStorePassword =
+        project.env.get("APP_RELEASE_STORE_PASSWORD") ?:
+        System.getenv("APP_RELEASE_STORE_PASSWORD") ?:
+        System.getenv("KEYSTORE_PASSWORD")
 
-            if (releaseStorePassword && releaseKeyPassword) {
-                storeFile file("pocketpal-release-key.keystore")
-                storePassword releaseStorePassword
-                keyAlias "pocketpal_key_alias"
-                keyPassword releaseKeyPassword
-            }
+    def releaseKeyPassword =
+        project.env.get("APP_RELEASE_KEY_PASSWORD") ?:
+        System.getenv("APP_RELEASE_KEY_PASSWORD") ?:
+        System.getenv("KEY_PASSWORD")
+
+    def releaseKeyAlias =
+        project.env.get("APP_RELEASE_KEY_ALIAS") ?:
+        System.getenv("KEY_ALIAS") ?:
+        "pocketpal_key_alias"
+
+    if (releaseStorePassword && releaseKeyPassword) {
+        storeFile file("pocketpal-release-key.keystore")
+        storePassword releaseStorePassword
+        keyAlias releaseKeyAlias
+        keyPassword releaseKeyPassword
         }
     }
+ }
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
